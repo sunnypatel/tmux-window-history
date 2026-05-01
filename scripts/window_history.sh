@@ -110,6 +110,30 @@ cmd_scrub() {
   fi
 }
 
+# Called by prefix + BSpace key binding.
+# Args: session_id
+cmd_back() {
+  local session_id="$1"
+  local stack; stack=$(get_stack "$session_id")
+  local size;  size=$(stack_count "$stack")
+  # Need at least 2 entries to navigate anywhere different
+  [ "$size" -le 1 ] && return
+  local idx; idx=$(get_index "$session_id")
+  local next; next=$(next_index "$idx" "$size")
+  local target; target=$(stack_get "$stack" "$next")
+  [ -z "$target" ] && return
+  # Set flag before select-window so the after-select-window hook suppresses push
+  set_navigating "$session_id" "1"
+  if ! tmux select-window -t "$target" 2>/dev/null; then
+    # Window no longer exists — scrub it and retry
+    set_navigating "$session_id" "0"
+    set_stack "$session_id" "$(stack_scrub "$stack" "$target")"
+    cmd_back "$session_id"
+  else
+    set_index "$session_id" "$next"
+  fi
+}
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 _main() {
   case "${1:-}" in
