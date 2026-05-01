@@ -134,6 +134,34 @@ cmd_back() {
   fi
 }
 
+# Called by prefix + W key binding. Shows display-menu of history stack.
+# Args: session_id
+cmd_menu() {
+  local session_id="$1"
+  local stack; stack=$(get_stack "$session_id")
+  [ -z "$stack" ] && tmux display-message "No window history yet" && return
+  local script; script="${BASH_SOURCE[0]}"
+  local args=(-T "Window History")
+  local i=0
+  for window_id in $stack; do
+    local name
+    name=$(tmux display-message -t "$window_id" -p "#I: #W" 2>/dev/null) || { i=$((i + 1)); continue; }
+    local key=""
+    [ "$i" -lt 9 ] && key=$((i + 1))
+    args+=("$name" "$key" "run-shell '\"$script\" jump \"$session_id\" \"$window_id\"'")
+    i=$((i + 1))
+  done
+  tmux display-menu "${args[@]}"
+}
+
+# Called from display-menu item selection.
+# Args: session_id window_id
+cmd_jump() {
+  local session_id="$1" window_id="$2"
+  set_navigating "$session_id" "1"
+  tmux select-window -t "$window_id" 2>/dev/null || set_navigating "$session_id" "0"
+}
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 _main() {
   case "${1:-}" in
