@@ -116,22 +116,28 @@ cmd_back() {
   local session_id="$1"
   local stack; stack=$(get_stack "$session_id")
   local size;  size=$(stack_count "$stack")
-  # Need at least 2 entries to navigate anywhere different
   [ "$size" -le 1 ] && return
   local idx; idx=$(get_index "$session_id")
-  local next; next=$(next_index "$idx" "$size")
-  local target; target=$(stack_get "$stack" "$next")
-  [ -z "$target" ] && return
-  # Set flag before select-window so the after-select-window hook suppresses push
-  set_navigating "$session_id" "1"
-  if ! tmux select-window -t "$target" 2>/dev/null; then
-    # Window no longer exists — scrub it and retry
+  local attempts=0
+  while [ "$attempts" -lt "$size" ]; do
+    local next; next=$(next_index "$idx" "$size")
+    local target; target=$(stack_get "$stack" "$next")
+    [ -z "$target" ] && return
+    set_navigating "$session_id" "1"
+    if tmux select-window -t "$target" 2>/dev/null; then
+      set_index "$session_id" "$next"
+      return
+    fi
+    # Window gone — scrub from stack and try next
     set_navigating "$session_id" "0"
-    set_stack "$session_id" "$(stack_scrub "$stack" "$target")"
-    cmd_back "$session_id"
-  else
-    set_index "$session_id" "$next"
-  fi
+    stack=$(stack_scrub "$stack" "$target")
+    set_stack "$session_id" "$stack"
+    size=$(stack_count "$stack")
+    idx="$next"
+    [ "$size" -le 1 ] && return
+    [ "$idx" -ge "$size" ] && idx=0
+    attempts=$((attempts + 1))
+  done
 }
 
 # Called by prefix + W key binding. Shows display-menu of history stack.
@@ -140,14 +146,19 @@ cmd_menu() {
   local session_id="$1"
   local stack; stack=$(get_stack "$session_id")
   [ -z "$stack" ] && tmux display-message "No window history yet" && return
+  local count; count=$(stack_count "$stack")
   local script; script="${BASH_SOURCE[0]}"
-  local args=(-T "Window History")
+  local args=(-T "Window History ($count entries)")
   local i=0
   for window_id in $stack; do
     local name
     name=$(tmux display-message -t "$window_id" -p "#I: #W" 2>/dev/null) || { i=$((i + 1)); continue; }
     local key=""
-    [ "$i" -lt 9 ] && key=$((i + 1))
+    if [ "$i" -lt 9 ]; then
+      key=$((i + 1))
+    elif [ "$i" -eq 9 ]; then
+      key="0"
+    fi
     args+=("$name" "$key" "run-shell '\"$script\" jump \"$session_id\" \"$window_id\"'")
     i=$((i + 1))
   done

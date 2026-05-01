@@ -15,7 +15,7 @@ No external dependencies — built with tmux built-ins only.
 
 ## Requirements
 
-- tmux 2.1+
+- tmux 3.0+
 - [TPM](https://github.com/tmux-plugins/tpm)
 
 ## Installation
