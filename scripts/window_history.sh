@@ -169,13 +169,15 @@ cmd_menu() {
   for window_id in $display_stack; do
     local name
     name=$(tmux display-message -t "$window_id" -p "#I: #W" 2>/dev/null) || { i=$((i + 1)); continue; }
-    local prefix=""
+    local prefix="" key=""
     if [ "$i" -lt 9 ]; then
       prefix="($((i + 1)))  "
+      key=$((i + 1))
     elif [ "$i" -eq 9 ]; then
       prefix="(0)  "
+      key="0"
     fi
-    args+=("$prefix$name" "" "run-shell '\"$script\" jump \"$window_id\"'")
+    args+=("$prefix$name" "$key" "run-shell '\"$script\" jump \"$window_id\"'")
     i=$((i + 1))
   done
   tmux display-menu "${args[@]}"
