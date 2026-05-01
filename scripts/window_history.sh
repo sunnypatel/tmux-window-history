@@ -158,9 +158,9 @@ cmd_menu() {
     name=$(tmux display-message -t "$window_id" -p "#I: #W" 2>/dev/null) || { i=$((i + 1)); continue; }
     local prefix=""
     if [ "$i" -lt 9 ]; then
-      prefix="$((i + 1))  "
+      prefix="($((i + 1)))  "
     elif [ "$i" -eq 9 ]; then
-      prefix="0  "
+      prefix="(0)  "
     fi
     args+=("$prefix$name" "" "run-shell '\"$script\" jump \"$window_id\"'")
     i=$((i + 1))
