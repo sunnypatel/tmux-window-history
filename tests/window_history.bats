@@ -90,28 +90,6 @@ setup() {
   [ "$result" = "" ]
 }
 
-# ── stack_get ──────────────────────────────────────────────────────────────────
-
-@test "stack_get: retrieves element at index 0" {
-  result=$(stack_get "@1 @2 @3" 0)
-  [ "$result" = "@1" ]
-}
-
-@test "stack_get: retrieves element at index 1" {
-  result=$(stack_get "@1 @2 @3" 1)
-  [ "$result" = "@2" ]
-}
-
-@test "stack_get: retrieves last element" {
-  result=$(stack_get "@1 @2 @3" 2)
-  [ "$result" = "@3" ]
-}
-
-@test "stack_get: out-of-bounds index returns empty string" {
-  result=$(stack_get "@1 @2" 5)
-  [ "$result" = "" ]
-}
-
 # ── stack_count ────────────────────────────────────────────────────────────────
 
 @test "stack_count: counts three entries" {
@@ -127,26 +105,4 @@ setup() {
 @test "stack_count: single entry returns 1" {
   result=$(stack_count "@1")
   [ "$result" = "1" ]
-}
-
-# ── next_index ─────────────────────────────────────────────────────────────────
-
-@test "next_index: increments from 0 to 1" {
-  result=$(next_index 0 5)
-  [ "$result" = "1" ]
-}
-
-@test "next_index: loops back to 0 at last entry" {
-  result=$(next_index 4 5)
-  [ "$result" = "0" ]
-}
-
-@test "next_index: size 1 always returns 0" {
-  result=$(next_index 0 1)
-  [ "$result" = "0" ]
-}
-
-@test "next_index: size 0 always returns 0" {
-  result=$(next_index 0 0)
-  [ "$result" = "0" ]
 }

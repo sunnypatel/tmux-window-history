@@ -29,7 +29,7 @@ stack_unique() {
   echo "$out"
 }
 
-# Remove window_id from stack.
+# Remove all occurrences of window_id from stack.
 # Args: stack window_id
 # Stdout: new stack string
 stack_scrub() {
@@ -41,17 +41,6 @@ stack_scrub() {
   echo "$out"
 }
 
-# Get window_id at index position.
-# Args: stack index
-# Stdout: window_id or empty string
-stack_get() {
-  local stack="$1" target="$2" i=0
-  for id in $stack; do
-    [ "$i" -eq "$target" ] && echo "$id" && return
-    i=$((i + 1))
-  done
-}
-
 # Count entries in stack.
 # Args: stack
 # Stdout: integer count
@@ -59,17 +48,6 @@ stack_count() {
   local stack="$1" count=0
   for id in $stack; do count=$((count + 1)); done
   echo "$count"
-}
-
-# Calculate next back-navigation index with looping.
-# Args: current_index stack_size
-# Stdout: next index
-next_index() {
-  local idx="$1" size="$2"
-  [ "$size" -eq 0 ] && echo 0 && return
-  local next=$((idx + 1))
-  [ "$next" -ge "$size" ] && next=0
-  echo "$next"
 }
 
 # ── tmux I/O helpers ───────────────────────────────────────────────────────────
@@ -83,8 +61,8 @@ _gopt_get() { tmux show-option -gqv "$1" 2>/dev/null || echo ""; }
 
 get_stack()      { _opt_get "$1" "@window-history-stack"; }
 set_stack()      { _opt_set "$1" "@window-history-stack" "$2"; }
-get_index()      { local v; v=$(_opt_get "$1" "@window-history-index"); echo "${v:-0}"; }
-set_index()      { _opt_set "$1" "@window-history-index" "$2"; }
+get_prev()       { _opt_get "$1" "@window-history-prev"; }
+set_prev()       { _opt_set "$1" "@window-history-prev" "$2"; }
 get_navigating() { local v; v=$(_opt_get "$1" "@window-history-navigating"); echo "${v:-0}"; }
 set_navigating() { _opt_set "$1" "@window-history-navigating" "$2"; }
 get_max_size()   { local v; v=$(_gopt_get "@window-history-size"); echo "${v:-10}"; }
@@ -103,8 +81,10 @@ cmd_push() {
   fi
   local max_size; max_size=$(get_max_size)
   local stack;    stack=$(get_stack "$session_id")
+  # Front of stack is the window we're leaving — record it as prev
+  local leaving="${stack%% *}"
+  [ -n "$leaving" ] && set_prev "$session_id" "$leaving"
   set_stack "$session_id" "$(stack_push "$stack" "$window_id" "$max_size")"
-  set_index "$session_id" "0"
 }
 
 # Called by after-kill-window hook.
@@ -113,47 +93,27 @@ cmd_scrub() {
   local session_id; session_id=$(_session_id)
   local window_id="$1"
   local stack; stack=$(get_stack "$session_id")
-  local idx;   idx=$(get_index "$session_id")
-  # Determine position of the killed window to adjust index
-  local pos=0 found=0
-  for id in $stack; do
-    [ "$id" = "$window_id" ] && found=1 && break
-    pos=$((pos + 1))
-  done
   set_stack "$session_id" "$(stack_scrub "$stack" "$window_id")"
-  # If the removed entry was at or before the current index, decrement index
-  if [ "$found" = "1" ] && [ "$pos" -le "$idx" ] && [ "$idx" -gt 0 ]; then
-    set_index "$session_id" "$((idx - 1))"
-  fi
+  # If the killed window was the back target, clear it
+  local prev; prev=$(get_prev "$session_id")
+  [ "$prev" = "$window_id" ] && set_prev "$session_id" ""
 }
 
-# Called by prefix + BSpace key binding.
+# Called by prefix + B key binding.
+# Swaps current window with @prev — each press updates the pointer so back
+# always means "wherever I just came from."
 cmd_back() {
   local session_id; session_id=$(_session_id)
-  local stack; stack=$(get_stack "$session_id")
-  local size;  size=$(stack_count "$stack")
-  [ "$size" -le 1 ] && return
-  local idx; idx=$(get_index "$session_id")
-  local attempts=0
-  while [ "$attempts" -lt "$size" ]; do
-    local next; next=$(next_index "$idx" "$size")
-    local target; target=$(stack_get "$stack" "$next")
-    [ -z "$target" ] && return
-    set_navigating "$session_id" "1"
-    if tmux select-window -t "$target" 2>/dev/null; then
-      set_index "$session_id" "$next"
-      return
-    fi
-    # Window gone — scrub from stack and try next
+  local prev; prev=$(get_prev "$session_id")
+  [ -z "$prev" ] && return
+  local current; current=$(tmux display-message -p '#{window_id}')
+  # Swap: make current the new prev before navigating away
+  set_prev "$session_id" "$current"
+  set_navigating "$session_id" "1"
+  tmux select-window -t "$prev" 2>/dev/null || {
     set_navigating "$session_id" "0"
-    stack=$(stack_scrub "$stack" "$target")
-    set_stack "$session_id" "$stack"
-    size=$(stack_count "$stack")
-    idx="$next"
-    [ "$size" -le 1 ] && return
-    [ "$idx" -ge "$size" ] && idx=0
-    attempts=$((attempts + 1))
-  done
+    set_prev "$session_id" ""
+  }
 }
 
 # Called by prefix + W key binding. Shows display-menu of history stack.
@@ -188,8 +148,14 @@ cmd_menu() {
 cmd_jump() {
   local session_id; session_id=$(_session_id)
   local window_id="$1"
+  local current; current=$(tmux display-message -p '#{window_id}')
+  local old_prev; old_prev=$(get_prev "$session_id")
+  set_prev "$session_id" "$current"
   set_navigating "$session_id" "1"
-  tmux select-window -t "$window_id" 2>/dev/null || set_navigating "$session_id" "0"
+  tmux select-window -t "$window_id" 2>/dev/null || {
+    set_navigating "$session_id" "0"
+    set_prev "$session_id" "$old_prev"
+  }
 }
 
 # ── Entry point ────────────────────────────────────────────────────────────────
