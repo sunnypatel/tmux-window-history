@@ -12,13 +12,14 @@ back_key="${back_key:-BSpace}"
 menu_key=$(tmux show-option -gqv "@window-history-menu-key")
 menu_key="${menu_key:-W}"
 
-# Hooks
+# Hooks — session_id is read inside the script from tmux context,
+# avoiding shell $N variable expansion conflicts with tmux session IDs.
 tmux set-hook -g after-select-window \
-  "run-shell '$SCRIPT push #{session_id} #{window_id}'"
+  "run-shell '$SCRIPT push #{window_id}'"
 
 tmux set-hook -g after-kill-window \
-  "run-shell '$SCRIPT scrub #{session_id} #{window_id}'"
+  "run-shell '$SCRIPT scrub #{window_id}'"
 
 # Key bindings
-tmux bind -r "$back_key" run-shell "$SCRIPT back #{session_id}"
-tmux bind    "$menu_key" run-shell "$SCRIPT menu #{session_id}"
+tmux bind -r "$back_key" run-shell "$SCRIPT back"
+tmux bind    "$menu_key" run-shell "$SCRIPT menu"

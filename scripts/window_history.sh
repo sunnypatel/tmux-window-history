@@ -62,6 +62,9 @@ next_index() {
 
 # ── tmux I/O helpers ───────────────────────────────────────────────────────────
 
+# Session ID is always fetched from tmux context to avoid shell $N variable conflicts.
+_session_id() { tmux display-message -p '#{session_id}'; }
+
 _opt_get()  { tmux show-option -t  "$1" -qv "$2" 2>/dev/null || echo ""; }
 _opt_set()  { tmux set-option  -t  "$1"     "$2" "$3"; }
 _gopt_get() { tmux show-option -gqv "$1" 2>/dev/null || echo ""; }
@@ -77,9 +80,10 @@ get_max_size()   { local v; v=$(_gopt_get "@window-history-size"); echo "${v:-10
 # ── Commands ───────────────────────────────────────────────────────────────────
 
 # Called by after-select-window hook.
-# Args: session_id window_id
+# Args: window_id
 cmd_push() {
-  local session_id="$1" window_id="$2"
+  local session_id; session_id=$(_session_id)
+  local window_id="$1"
   # If navigating via history, suppress push and clear the flag
   if [ "$(get_navigating "$session_id")" = "1" ]; then
     set_navigating "$session_id" "0"
@@ -92,9 +96,10 @@ cmd_push() {
 }
 
 # Called by after-kill-window hook.
-# Args: session_id window_id
+# Args: window_id
 cmd_scrub() {
-  local session_id="$1" window_id="$2"
+  local session_id; session_id=$(_session_id)
+  local window_id="$1"
   local stack; stack=$(get_stack "$session_id")
   local idx;   idx=$(get_index "$session_id")
   # Determine position of the killed window to adjust index
@@ -111,9 +116,8 @@ cmd_scrub() {
 }
 
 # Called by prefix + BSpace key binding.
-# Args: session_id
 cmd_back() {
-  local session_id="$1"
+  local session_id; session_id=$(_session_id)
   local stack; stack=$(get_stack "$session_id")
   local size;  size=$(stack_count "$stack")
   [ "$size" -le 1 ] && return
@@ -141,9 +145,8 @@ cmd_back() {
 }
 
 # Called by prefix + W key binding. Shows display-menu of history stack.
-# Args: session_id
 cmd_menu() {
-  local session_id="$1"
+  local session_id; session_id=$(_session_id)
   local stack; stack=$(get_stack "$session_id")
   [ -z "$stack" ] && tmux display-message "No window history yet" && return
   local count; count=$(stack_count "$stack")
@@ -159,16 +162,17 @@ cmd_menu() {
     elif [ "$i" -eq 9 ]; then
       key="0"
     fi
-    args+=("$name" "$key" "run-shell '\"$script\" jump \"$session_id\" \"$window_id\"'")
+    args+=("$name" "$key" "run-shell '\"$script\" jump \"$window_id\"'")
     i=$((i + 1))
   done
   tmux display-menu "${args[@]}"
 }
 
 # Called from display-menu item selection.
-# Args: session_id window_id
+# Args: window_id
 cmd_jump() {
-  local session_id="$1" window_id="$2"
+  local session_id; session_id=$(_session_id)
+  local window_id="$1"
   set_navigating "$session_id" "1"
   tmux select-window -t "$window_id" 2>/dev/null || set_navigating "$session_id" "0"
 }
@@ -176,11 +180,11 @@ cmd_jump() {
 # ── Entry point ────────────────────────────────────────────────────────────────
 _main() {
   case "${1:-}" in
-    push)  cmd_push  "$2" "$3" ;;
-    back)  cmd_back  "$2"      ;;
-    scrub) cmd_scrub "$2" "$3" ;;
-    menu)  cmd_menu  "$2"      ;;
-    jump)  cmd_jump  "$2" "$3" ;;
+    push)  cmd_push  "$2" ;;
+    back)  cmd_back       ;;
+    scrub) cmd_scrub "$2" ;;
+    menu)  cmd_menu       ;;
+    jump)  cmd_jump  "$2" ;;
   esac
 }
 
