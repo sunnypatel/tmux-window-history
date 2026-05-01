@@ -60,6 +60,56 @@ next_index() {
   echo "$next"
 }
 
+# ── tmux I/O helpers ───────────────────────────────────────────────────────────
+
+_opt_get()  { tmux show-option -t  "$1" -qv "$2" 2>/dev/null || echo ""; }
+_opt_set()  { tmux set-option  -t  "$1"     "$2" "$3"; }
+_gopt_get() { tmux show-option -gqv "$1" 2>/dev/null || echo ""; }
+
+get_stack()      { _opt_get "$1" "@window-history-stack"; }
+set_stack()      { _opt_set "$1" "@window-history-stack" "$2"; }
+get_index()      { local v; v=$(_opt_get "$1" "@window-history-index"); echo "${v:-0}"; }
+set_index()      { _opt_set "$1" "@window-history-index" "$2"; }
+get_navigating() { local v; v=$(_opt_get "$1" "@window-history-navigating"); echo "${v:-0}"; }
+set_navigating() { _opt_set "$1" "@window-history-navigating" "$2"; }
+get_max_size()   { local v; v=$(_gopt_get "@window-history-size"); echo "${v:-10}"; }
+
+# ── Commands ───────────────────────────────────────────────────────────────────
+
+# Called by after-select-window hook.
+# Args: session_id window_id
+cmd_push() {
+  local session_id="$1" window_id="$2"
+  # If navigating via history, suppress push and clear the flag
+  if [ "$(get_navigating "$session_id")" = "1" ]; then
+    set_navigating "$session_id" "0"
+    return
+  fi
+  local max_size; max_size=$(get_max_size)
+  local stack;    stack=$(get_stack "$session_id")
+  set_stack "$session_id" "$(stack_push "$stack" "$window_id" "$max_size")"
+  set_index "$session_id" "0"
+}
+
+# Called by after-kill-window hook.
+# Args: session_id window_id
+cmd_scrub() {
+  local session_id="$1" window_id="$2"
+  local stack; stack=$(get_stack "$session_id")
+  local idx;   idx=$(get_index "$session_id")
+  # Determine position of the killed window to adjust index
+  local pos=0 found=0
+  for id in $stack; do
+    [ "$id" = "$window_id" ] && found=1 && break
+    pos=$((pos + 1))
+  done
+  set_stack "$session_id" "$(stack_scrub "$stack" "$window_id")"
+  # If the removed entry was at or before the current index, decrement index
+  if [ "$found" = "1" ] && [ "$pos" -le "$idx" ] && [ "$idx" -gt 0 ]; then
+    set_index "$session_id" "$((idx - 1))"
+  fi
+}
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 _main() {
   case "${1:-}" in
