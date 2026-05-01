@@ -7,7 +7,7 @@ SCRIPT="$CURRENT_DIR/scripts/window_history.sh"
 
 # Read user config (fall back to defaults)
 back_key=$(tmux show-option -gqv "@window-history-back-key")
-back_key="${back_key:-BSpace}"
+back_key="${back_key:-B}"
 
 menu_key=$(tmux show-option -gqv "@window-history-menu-key")
 menu_key="${menu_key:-W}"
