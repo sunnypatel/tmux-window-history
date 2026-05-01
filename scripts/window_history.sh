@@ -2,19 +2,31 @@
 
 # ── Pure string functions (no tmux dependency) ─────────────────────────────────
 
-# Push window_id to front of stack, dedup, trim to max_size.
+# Push window_id to front of stack, trim to max_size. Allows duplicates.
 # Args: stack window_id max_size
 # Stdout: new stack string
 stack_push() {
   local stack="$1" window_id="$2" max_size="$3"
   local new="$window_id" count=1
   for id in $stack; do
-    [ "$id" = "$window_id" ] && continue
     [ "$count" -ge "$max_size" ] && break
     new="$new $id"
     count=$((count + 1))
   done
   echo "$new"
+}
+
+# Return stack with duplicates removed (first occurrence wins).
+# Args: stack
+# Stdout: deduplicated stack string
+stack_unique() {
+  local stack="$1" out="" seen=""
+  for id in $stack; do
+    case " $seen " in *" $id "*) continue ;; esac
+    seen="$seen $id"
+    out="${out:+$out }$id"
+  done
+  echo "$out"
 }
 
 # Remove window_id from stack.
@@ -149,11 +161,12 @@ cmd_menu() {
   local session_id; session_id=$(_session_id)
   local stack; stack=$(get_stack "$session_id")
   [ -z "$stack" ] && tmux display-message "No window history yet" && return
-  local count; count=$(stack_count "$stack")
+  local display_stack; display_stack=$(stack_unique "$stack")
+  local count; count=$(stack_count "$display_stack")
   local script; script="${BASH_SOURCE[0]}"
   local args=(-T "Window History ($count entries)")
   local i=0
-  for window_id in $stack; do
+  for window_id in $display_stack; do
     local name
     name=$(tmux display-message -t "$window_id" -p "#I: #W" 2>/dev/null) || { i=$((i + 1)); continue; }
     local prefix=""

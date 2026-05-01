@@ -16,9 +16,9 @@ setup() {
   [ "$result" = "@4 @1 @2 @3" ]
 }
 
-@test "stack_push: deduplicates — moves existing ID to front" {
+@test "stack_push: allows duplicate entries (true history)" {
   result=$(stack_push "@1 @2 @3" "@2" 10)
-  [ "$result" = "@2 @1 @3" ]
+  [ "$result" = "@2 @1 @2 @3" ]
 }
 
 @test "stack_push: trims to max_size" {
@@ -31,9 +31,31 @@ setup() {
   [ "$result" = "@3" ]
 }
 
-@test "stack_push: dedup then trim — moved entry counts toward max" {
-  result=$(stack_push "@1 @2 @3 @4" "@3" 3)
-  [ "$result" = "@3 @1 @2" ]
+@test "stack_push: back-and-forth produces correct history" {
+  result=$(stack_push "@1 @2 @1 @2" "@1" 10)
+  [ "$result" = "@1 @1 @2 @1 @2" ]
+}
+
+# ── stack_unique ───────────────────────────────────────────────────────────────
+
+@test "stack_unique: removes duplicates keeping first occurrence" {
+  result=$(stack_unique "@1 @2 @1 @3 @2")
+  [ "$result" = "@1 @2 @3" ]
+}
+
+@test "stack_unique: no duplicates returns unchanged" {
+  result=$(stack_unique "@1 @2 @3")
+  [ "$result" = "@1 @2 @3" ]
+}
+
+@test "stack_unique: empty stack returns empty" {
+  result=$(stack_unique "")
+  [ "$result" = "" ]
+}
+
+@test "stack_unique: all duplicates returns single entry" {
+  result=$(stack_unique "@1 @1 @1")
+  [ "$result" = "@1" ]
 }
 
 # ── stack_scrub ────────────────────────────────────────────────────────────────
