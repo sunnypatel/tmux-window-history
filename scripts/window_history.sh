@@ -81,9 +81,9 @@ cmd_push() {
   fi
   local max_size; max_size=$(get_max_size)
   local stack;    stack=$(get_stack "$session_id")
-  # Front of stack is the window we're leaving — record it as prev
-  local leaving="${stack%% *}"
-  [ -n "$leaving" ] && set_prev "$session_id" "$leaving"
+  # Ask tmux for the window we're actually leaving (reliable after back-nav too)
+  local leaving; leaving=$(tmux display-message -p '#{window_id}' -t '!')
+  [ -n "$leaving" ] && [ "$leaving" != "$window_id" ] && set_prev "$session_id" "$leaving"
   set_stack "$session_id" "$(stack_push "$stack" "$window_id" "$max_size")"
 }
 
